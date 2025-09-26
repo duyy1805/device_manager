@@ -18,7 +18,8 @@ import {
   useTheme,
   useMediaQuery,
 } from "@mui/material";
-import { Html5Qrcode } from "html5-qrcode";
+import { Html5Qrcode, Html5QrcodeScanner } from "html5-qrcode";
+import "../styles/html5-qrcode-override.css";
 
 type ThietBi = {
   DeviceId: number;
@@ -59,6 +60,8 @@ function B9device() {
   // const [scannedCode, setScannedCode] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogAllDeviceOpen, setDialogAllDeviceOpen] = useState(false);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [pendingIndex, setPendingIndex] = useState<number | null>(null);
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const isScanningRef = useRef(false);
   const lastScannedCodeRef = useRef<string | null>(null);
@@ -112,7 +115,7 @@ function B9device() {
       ...editedDevice,
       InspectionDate: new Date().toISOString(),
     };
-    console.log(updated);
+    console.log();
     const inspection = {
       DeviceId: updated.DeviceId,
       QualityRating: updated.QualityRating || null,
@@ -212,6 +215,7 @@ function B9device() {
       if (!response.ok) throw new Error("Lỗi khi gọi dailycheck");
 
       const result: DailyCheckItem[] = await response.json();
+      console.log("Kết quả kiểm tra:", result);
       setDailyCheckItems(result);
       setDailyCheckDialogOpen(true);
     } catch (err) {
@@ -223,16 +227,20 @@ function B9device() {
     if (isScanningRef.current) return;
 
     try {
-      const qrCodeScanner = new Html5Qrcode("reader");
-      html5QrCodeRef.current = qrCodeScanner;
-      isScanningRef.current = true;
-
-      await qrCodeScanner.start(
-        { facingMode: "environment" },
+      const qrCodeScanner = new Html5QrcodeScanner(
+        "reader",
         {
           fps: 10,
           qrbox: { width: 250, height: 250 },
+          rememberLastUsedCamera: true,
+          showTorchButtonIfSupported: true,
+          showZoomSliderIfSupported: true,
         },
+        false
+      );
+      isScanningRef.current = true;
+
+      await qrCodeScanner.render(
         (decodedText) => {
           if (lastScannedCodeRef.current === decodedText) return;
           const device = dataRef.current.find(
@@ -313,7 +321,7 @@ function B9device() {
       </Typography>
 
       <Box p={2}>
-        <Box id="reader" mt={2} width={350} mx="auto" />
+        <Box id="reader" bgcolor="#FFFFFF" mt={2} width={350} mx="auto" />
 
         <Dialog
           open={dialogOpen}
@@ -481,13 +489,32 @@ function B9device() {
             </TableHead>
             <TableBody>
               {dailyCheckItems.map((item, index) => (
-                <TableRow key={item.CheckItemId}>
+                <TableRow
+                  key={item.CheckItemId}
+                  sx={{
+                    backgroundColor:
+                      item.Status === "Đạt"
+                        ? "#e8f5e9"
+                        : item.Status === "Không đạt"
+                        ? "#ffebee"
+                        : "inherit",
+                  }}
+                >
                   <TableCell>{item.CheckItemName}</TableCell>
                   <TableCell>
                     {typeof item.Status === "string" ? item.Status : "-"}
                   </TableCell>
                   <TableCell>
-                    {typeof item.Note === "string" ? item.Note : "-"}
+                    <TextField
+                      variant="standard"
+                      fullWidth
+                      value={item.Note || ""}
+                      onChange={(e) => {
+                        const newItems = [...dailyCheckItems];
+                        newItems[index].Note = e.target.value;
+                        setDailyCheckItems(newItems);
+                      }}
+                    />
                   </TableCell>
                   <TableCell>
                     {item.InspectionDate &&
@@ -509,7 +536,10 @@ function B9device() {
                       variant="outlined"
                       color="error"
                       size="small"
-                      onClick={() => handleStatusChange(index, "Không đạt")}
+                      onClick={() => {
+                        setPendingIndex(index);
+                        setConfirmDialogOpen(true);
+                      }}
                     >
                       Không đạt
                     </Button>
@@ -584,6 +614,31 @@ function B9device() {
             </Table>
           </Box>
         </DialogContent>
+      </Dialog>
+      <Dialog
+        open={confirmDialogOpen}
+        onClose={() => setConfirmDialogOpen(false)}
+      >
+        <DialogTitle>Xác nhận</DialogTitle>
+        <DialogContent>
+          Bạn có chắc chắn muốn đánh dấu mục này là <strong>"Không đạt"</strong>
+          ?
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDialogOpen(false)}>Hủy</Button>
+          <Button
+            color="error"
+            onClick={() => {
+              if (pendingIndex !== null) {
+                handleStatusChange(pendingIndex, "Không đạt");
+              }
+              setConfirmDialogOpen(false);
+              setPendingIndex(null);
+            }}
+          >
+            Xác nhận
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

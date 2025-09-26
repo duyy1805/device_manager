@@ -1,0 +1,18 @@
+/* src/html5-qrcode-override.css */
+
+#html5-qrcode-button-camera-start,
+#html5-qrcode-button-camera-stop {
+    padding: 8px 16px;
+    background-color: #1d4ed8;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 12px;
+}
+
+/* #reader {
+    width: 100% !important;
+    max-width: 500px;
+    margin: auto;
+} */
